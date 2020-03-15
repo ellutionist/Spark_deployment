@@ -47,13 +47,13 @@ The following variables should be set correctly:
   * spark_folder_name: the folder of Spark that is extracted from .tar file
   * spark_tar_path: the path of .tar file that will be uploaded to server
 
-#### master
+#### master-port
 Write the **port** (not address) of master in it.
 For example,
 
     10000
 
-#### slaves
+#### slave-ports
 Write the **port** (not address) of slaves in it. 
 
 The address of slaves will be automaticall deployed in master (according to port-map).
