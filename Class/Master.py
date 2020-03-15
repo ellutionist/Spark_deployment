@@ -31,8 +31,8 @@ class Master(Server):
 
     def set_ssh_config(self):
         """
-        In order to enable master to log in slave-ports with private keys, upload the private key first and then put correct
-        '~/.ssh/config' on master.
+        In order to enable master-port to log in slave-ports with private keys, upload the private key first and then put correct
+        '~/.ssh/config' on master-port.
         """
         self.ensure_directory("~/.ssh")
         private_key_path = self.get_config()['ssh'].get("private_key_path")
