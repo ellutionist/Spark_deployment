@@ -74,6 +74,9 @@ For example,
 * Install packages i.e. two .jar files are set.
 
 ### Then
+Change the directory to
+    
+    Spark_deplyment/
 
 Run the Python script as
 
