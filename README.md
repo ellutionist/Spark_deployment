@@ -32,11 +32,11 @@ Run the shell script
 ### Config
 
 #### server.ini
-The variables that should be set correctly:
+The following variables should be set correctly:
 * ssh
   * private_key_path: path of private key
   * public_key_path: path of public key
-  * username: the username of each server (make sure it has sudo authentication)
+  * username: the username of each server (make sure it has sudo privilage)
   * password: the password of username
 * java
   * JAVA_HOME: path of Java on server i.e. the environment variable
