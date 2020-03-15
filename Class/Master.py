@@ -1,4 +1,4 @@
-from Server import Server
+from Class.Server import Server
 from os import remove
 from typing import List
 

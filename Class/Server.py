@@ -5,8 +5,8 @@ from configparser import ConfigParser
 
 
 class Server:
-    __config_path = "conf/server.ini"
-    __profile_path = "etc/profile"
+    __config_path = "./conf/server.ini"
+    __profile_path = "./etc/profile"
 
     def __init__(self, port: int):
         self.__port = port

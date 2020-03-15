@@ -1,6 +1,6 @@
 from typing import List
-from Server import Server
-from Master import Master
+from Class.Server import Server
+from Class.Master import Master
 
 
 def main():
