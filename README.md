@@ -32,11 +32,11 @@ Run the shell script
 ### Config
 
 #### server.ini
-The variables that should be set correctly:
+The following variables should be set correctly:
 * ssh
   * private_key_path: path of private key
   * public_key_path: path of public key
-  * username: the username of each server (make sure it has sudo authentication)
+  * username: the username of each server (make sure it has sudo privilage)
   * password: the password of username
 * java
   * JAVA_HOME: path of Java on server i.e. the environment variable
@@ -47,13 +47,13 @@ The variables that should be set correctly:
   * spark_folder_name: the folder of Spark that is extracted from .tar file
   * spark_tar_path: the path of .tar file that will be uploaded to server
 
-#### master
+#### master-port
 Write the **port** (not address) of master in it.
 For example,
 
     10000
 
-#### slaves
+#### slave-ports
 Write the **port** (not address) of slaves in it. 
 
 The address of slaves will be automaticall deployed in master (according to port-map).
