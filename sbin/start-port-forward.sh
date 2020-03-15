@@ -5,7 +5,6 @@ do
 	array=($line)
 	port=${array[0]}
 	addr=${array[1]}
-	echo $port
 
   # remove the known host
   ssh-keygen -R [localhost]:$port

@@ -1,11 +1,12 @@
 from fabric import Connection
 from fabric.runners import Result
-from paramiko import SSHException
 from invoke import Responder, UnexpectedExit
 from configparser import ConfigParser
 
+
 class Server:
-    __config_path = "./conf/server.ini"
+    __config_path = "conf/server.ini"
+    __profile_path = "etc/profile"
 
     def __init__(self, port: int):
         self.__port = port
@@ -18,13 +19,15 @@ class Server:
 
         self.__conn: Connection = self._connect()
 
+        self._disable_firewall()
+
     def upload_profile(self):
         """
         Upload the profile that edited locally, if the environmental variables are not correct.
         :return: None
         """
         if not self._check_profile():
-            profile_path = self.__config["java"].get("profile_path")
+            profile_path = self.__profile_path
 
             pwd = self.__conn.run("pwd", hide=True).stdout.strip()
             self.__conn.put(profile_path, '{pwd}/profile'.format(pwd=pwd))
@@ -42,14 +45,14 @@ class Server:
         If the java is not installed yet, then install it.
         :return: None
         """
-        if not self._check_java():
+        if not self.check_java():
             print("Installing Java on port {}.".format(self.__port))
 
             java_tar_path = self.__config["java"].get("java_tar_path")
             JAVA_HOME = self.__config["java"].get("JAVA_HOME")
             java_folder_name = self.__config["java"].get("java_folder_name")
 
-            self._ensure_directory("~/Downloads")
+            self.ensure_directory("~/Downloads")
 
             pwd = self.__conn.run("pwd", hide=True).stdout.strip()
             self.__conn.put(java_tar_path, "{pwd}/Downloads/jdk8.tar".format(pwd=pwd))
@@ -59,7 +62,7 @@ class Server:
                             pty=True, watchers=[self.__sudopass], hide=True)
 
             # check java again
-            if not self._check_java():
+            if not self.check_java():
                 raise JavaInstallationFailure(self.__port)
 
     def install_spark(self):
@@ -67,14 +70,16 @@ class Server:
         If the Spark is not installed yet, then install it.
         :return: None
         """
-        if not self._check_spark():
+        if not self.check_spark():
             print("Installing Spark on port {}.".format(self.__port))
             spark_tar_path = self.__config["spark"].get("spark_tar_path")
             SPARK_HOME = self.__config["spark"].get("SPARK_HOME")
+            SPARK_HOME = SPARK_HOME[:-1] if SPARK_HOME[-1] == "/" else SPARK_HOME
             spark_folder_name = self.__config["spark"].get("spark_folder_name")
 
-            self._ensure_directory("~/Downloads")
-            self._ensure_directory("~/opt/module")
+            self.ensure_directory("~/Downloads")
+            install_location = SPARK_HOME[:-len(SPARK_HOME.split("/")[-1])]
+            self.ensure_directory(install_location)
 
             pwd = self.__conn.run("pwd", hide=True).stdout.strip()
             self.__conn.put(spark_tar_path, "{pwd}/Downloads/spark.tar".format(pwd=pwd))
@@ -84,7 +89,7 @@ class Server:
                             pty=True, watchers=[self.__sudopass], hide=True)
 
             # check spark again
-            if not self._check_spark():
+            if not self.check_spark():
                 raise SparkInstallationFailure(self.__port)
 
     def _connect(self) -> Connection:
@@ -135,7 +140,7 @@ class Server:
         config.read(self.__config_path)
         return config
 
-    def _check_java(self) -> bool:
+    def check_java(self) -> bool:
         """
         Check whether the java has already been installed
         :return: boolean indicator
@@ -148,7 +153,7 @@ class Server:
         except UnexpectedExit:
             return False
 
-    def _check_spark(self) -> bool:
+    def check_spark(self) -> bool:
         """
         Check whether the spark has already been installed
         :return: boolean indicator
@@ -174,7 +179,11 @@ class Server:
 
         return result_java.stdout.strip() == JAVA_HOME and result_spark.stdout.strip() == SPARK_HOME
 
-    def _ensure_directory(self, path: str):
+    def _disable_firewall(self):
+        self.__conn.run("sudo systemctl disable firewalld", pty=True, watchers=[self.__sudopass], hide=True)
+        self.__conn.run("sudo systemctl stop firewalld", pty=True, watchers=[self.__sudopass], hide=True)
+
+    def ensure_directory(self, path: str):
         """
         Universal method to check whether a director exists and if not, create it (recursively).
         :param path: the specific path
@@ -185,9 +194,15 @@ class Server:
         except UnexpectedExit:
             path = path[:-1] if path[-1] == "/" else path  # remove the possible "/" at tail
             higher_level = path[:-len(path.split("/")[-1])]
-            self._ensure_directory(higher_level)  # recursively call itself to ensure the higher level is created
+            self.ensure_directory(higher_level)  # recursively call itself to ensure the higher level is created
             self.__conn.run("mkdir {path}".format(path=path))
             print("mkdir {path} on port {port}.".format(path=path, port=self.__port))
+
+    def get_connection(self) -> Connection:
+        return self.__conn
+
+    def get_config(self) -> ConfigParser:
+        return self.__config
 
 
 class JavaInstallationFailure(Exception):
