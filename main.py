@@ -9,10 +9,10 @@ def main():
         master.upload_profile()
         master.install_java()
         master.install_spark()
-        master.set_slaves()  # set "$SPARK_HOME/conf/slaves" based on local config
-        master.set_ssh_config()  # enable master to log in slaves with private key
+        master.set_slaves()  # set "$SPARK_HOME/conf/slave-ports" based on local config
+        master.set_ssh_config()  # enable master to log in slave-ports with private key
 
-    with open("conf/slaves", "r") as f:
+    with open("conf/slave-ports", "r") as f:
         ports: List[int] = [int(line) for line in f.readlines()]
 
         for port in ports:
