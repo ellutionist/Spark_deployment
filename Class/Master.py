@@ -9,30 +9,30 @@ class Master(Server):
 
     def set_slaves(self):
         """
-        Create a file named 'slave-ports' based on './conf/slave-ports' (ports) and './conf/port-map' and upload it to server.
-        The slave-ports of spark will be configured correctly.
+        Create a file named 'slaves' based on './conf/slave-ports' (ports) and './conf/port-map' and upload it to server.
+        The address of spark will be configured correctly.
         """
         if self.check_spark():
             port_map: dict = self._get_port_map()
             slave_ports: List[int] = self._get_slave_ports()
 
-            with open("./slave-ports", "w") as slaves_tmp:
+            with open("./slaves", "w") as slaves_tmp:
                 lines = [port_map[port] for port in slave_ports]
                 lines.append("\n")
                 slaves_tmp.writelines(lines)
 
             SPARK_HOME = self.get_config()["spark"].get("SPARK_HOME")
-            self.get_connection().run("rm {slaves_path}".format(slaves_path="{SPARK_HOME}/conf/slave-ports".
+            self.get_connection().run("rm {slaves_path}".format(slaves_path="{SPARK_HOME}/conf/slaves".
                                                                 format(SPARK_HOME=SPARK_HOME)
                                                                 )
                                       )
-            self.get_connection().put("./slave-ports", "{SPARK_HOME}/conf/slave-ports".format(SPARK_HOME=SPARK_HOME))
-            remove("./slave-ports")
+            self.get_connection().put("./slaves", "{SPARK_HOME}/conf/slaves".format(SPARK_HOME=SPARK_HOME))
+            remove("./slaves")
 
     def set_ssh_config(self):
         """
-        In order to enable master-port to log in slave-ports with private keys, upload the private key first and then put correct
-        '~/.ssh/config' on master-port.
+        In order to enable master-port to log in slaves with private keys, upload the private key first and then put
+        correct '~/.ssh/config' on master-port.
         """
         self.ensure_directory("~/.ssh")
         private_key_path = self.get_config()['ssh'].get("private_key_path")
