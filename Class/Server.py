@@ -11,8 +11,8 @@ class Server:
     def __init__(self, port: int):
         self.__port = port
         self.__config: ConfigParser = self._load_config()
-        self.__username = self.__config["ssh"].get("username")
-        self.__password = self.__config["ssh"].get("password")
+        self.__username: str = self.__config["ssh"].get("username")
+        self.__password: str = self.__config["ssh"].get("password")
 
         self.__sudopass = Responder(pattern=r"\[sudo\] password for {username}:".format(username=self.__username),
                                     response="{psw}\n".format(psw=self.__password),)
