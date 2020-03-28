@@ -7,6 +7,25 @@ class Master(Server):
     def __init__(self, port: int):
         super(Master, self).__init__(port)
 
+    def broad_cast_conf(self, slaves: List[Server] = None):
+        """
+        Send the $SPARK_HOME/conf/spark-env.sh to all the slaves.
+        If a list of Server objects is passed, the method will upload the config file directly,
+        otherwise, the method will read the slave-ports and connect to servers.
+        :return:
+        """
+
+        SPARK_HOME: str = self.get_connection().run("source /etc/profile && echo $SPARK_HOME", hide=True).stdout.strip()
+        remote_path = "{SPARK_HOME}/conf/spark-env.sh".format(SPARK_HOME=SPARK_HOME)
+        self.get_connection().get(remote_path, "./tmp/spark-env.sh")
+        if slaves is None:
+            ports: List[int] = self._get_slave_ports()
+            slaves: List[Server] = [Server(port) for port in ports]
+
+        for slave in slaves:
+            slave.get_connection().put("./tmp/spark-env.sh", remote_path)
+        remove("./tmp/spark-env.sh")
+
     def set_slaves(self):
         """
         Create a file named 'slaves' based on './conf/slave-ports' (ports) and './conf/port-map' and upload it to server.
@@ -81,8 +100,5 @@ class Master(Server):
 
 if __name__ == '__main__':
     master = Master(10000)
-    master.upload_profile()
-    master.install_java()
-    master.install_spark()
-    master.set_slaves()
-    master.set_ssh_config()
+    master.broad_cast_conf()
+
