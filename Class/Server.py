@@ -2,6 +2,7 @@ from fabric import Connection
 from fabric.runners import Result
 from invoke import Responder, UnexpectedExit
 from configparser import ConfigParser
+import os
 
 
 class Server:
@@ -13,13 +14,28 @@ class Server:
         self.__config: ConfigParser = self._load_config()
         self.__username: str = self.__config["ssh"].get("username")
         self.__password: str = self.__config["ssh"].get("password")
+        self.__monitor_director: str = self.__config["monitor"].get("monitor_directory")
 
         self.__sudopass = Responder(pattern=r"\[sudo\] password for {username}:".format(username=self.__username),
-                                    response="{psw}\n".format(psw=self.__password),)
+                                    response="{psw}\n".format(psw=self.__password), )
 
         self.__conn: Connection = self._connect()
 
         self._disable_firewall()
+
+        self.__monitor_running: bool = False
+
+    def start_monitor(self, interval: float = 0.5):
+        if self.check_monitor():
+            self.__conn.run(self.__monitor_director + "/start.sh " + str(interval), hide=True)
+            self.__monitor_running = True
+            print("Monitor started on port {}.".format(self.__port))
+
+    def stop_monitor(self):
+        if self.__monitor_running:
+            self.__conn.run(self.__monitor_director + "/stop.sh", hide=True)
+            self.__monitor_running = False
+            print("Monitor stopped on port {}.".format(self.__port))
 
     def upload_profile(self):
         """
@@ -40,6 +56,47 @@ class Server:
             if not self._check_profile():
                 raise ProfileFailure(self.__port)
 
+    def update_monitor(self):
+        if self.check_monitor():
+            self.__conn.run("rm -rf " + self.__monitor_director)
+            self.install_monitor()
+
+    def install_monitor(self):
+        """
+        upload the hardware monitor script to server
+        :return:
+        """
+        if not self.check_monitor():
+            print("Installing monitor on port {}.".format(self.__port))
+            monitor_tar_path = self.__config["monitor"].get("monitor_tar_path")
+            self.ensure_directory("~/Downloads")
+            self.ensure_directory("~/opt")
+            pwd = self.__conn.run("pwd", hide=True).stdout.strip()
+            self.__conn.put(monitor_tar_path, "{pwd}/Downloads/monitor.tar".format(pwd=pwd))
+            self.__conn.run('cd ~/Downloads && tar -xf ~/Downloads/monitor.tar')
+            self.__conn.run('mv ~/Downloads/{folder_name} ~/opt/monitor'
+                            .format(folder_name="monitor"), hide=True)
+
+    def install_python3(self):
+        """
+        If the python3 is not installed yet, then install it.
+        :return: None
+        :return:
+        """
+        if not self.check_python3():
+            print("Installing python3 on port {port}.".format(port=self.__port))
+            try:
+                self.__conn.run("sudo -S yum install epel-release -y", watchers=[self.__sudopass], hide=True)
+                self.__conn.run("sudo -S yum install https://centos7.iuscommunity.org/ius-release.rpm -y",
+                                watchers=[self.__sudopass], hide=True)
+            finally:
+                self.__conn.run("sudo -S yum install python36u -y", watchers=[self.__sudopass], hide=True)
+                self.__conn.run("sudo -S yum install yum install python36u-devel -y", watchers=[self.__sudopass],
+                                hide=True)
+                self.__conn.run("sudo -S pip3 install psutil", watchers=[self.__sudopass], hide=True)
+                if not self.check_python3():
+                    raise Python3InstallationFailure(self.__port)
+
     def install_java(self):
         """
         If the java is not installed yet, then install it.
@@ -57,9 +114,8 @@ class Server:
             pwd = self.__conn.run("pwd", hide=True).stdout.strip()
             self.__conn.put(java_tar_path, "{pwd}/Downloads/jdk8.tar".format(pwd=pwd))
             self.__conn.run('cd ~/Downloads && tar -xf ~/Downloads/jdk8.tar')
-            self.__conn.run('sudo mv ~/Downloads/{folder_name} {JAVA_HOME}'.format(folder_name=java_folder_name,
-                                                                                   JAVA_HOME=JAVA_HOME),
-                            pty=True, watchers=[self.__sudopass], hide=True)
+            self.__conn.run('mv ~/Downloads/{folder_name} {JAVA_HOME}'.format(folder_name=java_folder_name,
+                                                                              JAVA_HOME=JAVA_HOME), hide=True)
 
             # check java again
             if not self.check_java():
@@ -84,13 +140,76 @@ class Server:
             pwd = self.__conn.run("pwd", hide=True).stdout.strip()
             self.__conn.put(spark_tar_path, "{pwd}/Downloads/spark.tar".format(pwd=pwd))
             self.__conn.run('cd ~/Downloads && tar -xf ~/Downloads/spark.tar')
-            self.__conn.run('sudo mv ~/Downloads/{folder_name} {SPARK_HOME}'.format(folder_name=spark_folder_name,
-                                                                                    SPARK_HOME=SPARK_HOME),
-                            pty=True, watchers=[self.__sudopass], hide=True)
+            self.__conn.run('mv ~/Downloads/{folder_name} {SPARK_HOME}'.format(folder_name=spark_folder_name,
+                                                                               SPARK_HOME=SPARK_HOME), hide=True)
 
             # check spark again
             if not self.check_spark():
                 raise SparkInstallationFailure(self.__port)
+
+    def check_monitor(self) -> bool:
+        try:
+            self.__conn.run("cd " + self.__monitor_director, hide=True)
+            self.__conn.run("cd " + self.__monitor_director + "/logs", hide=True)
+            print("Monitor has already been installed on port {}.".format(self.__port))
+            return True
+        except UnexpectedExit:
+            return False
+
+    def check_java(self) -> bool:
+        """
+        Check whether the java has already been installed
+        :return: boolean indicator
+        """
+        JAVA_HOME = self.__config["java"].get("JAVA_HOME")
+        try:
+            self.__conn.run("cd {JAVA_HOME}".format(JAVA_HOME=JAVA_HOME), hide=True)  # check the directory of java
+            print("Java has already been installed on port {port}.".format(port=self.__port))
+            return True
+        except UnexpectedExit:
+            return False
+
+    def check_spark(self) -> bool:
+        """
+        Check whether the spark has already been installed
+        :return: boolean indicator
+        """
+        SPARK_HOME = self.__config["spark"].get("SPARK_HOME")
+        try:
+            self.__conn.run("cd {SPARK_HOME}".format(SPARK_HOME=SPARK_HOME), hide=True)  # check the directory of spark
+            print("Spark has already been installed on port {port}.".format(port=self.__port))
+            return True
+        except UnexpectedExit:
+            return False
+
+    def check_python3(self) -> bool:
+        """
+        Check whether the python3 and psutil library has already been installed
+        :return: boolean indicator
+        """
+        try:
+            version = self.__conn.run("python3 --version", hide=True).stdout.strip()
+            print("{version} has already been installed.".format(version=version))
+            self.__conn.run("pip3 install psutil", hide=True)
+            print("psutil has already been installed.")
+            return True
+        except UnexpectedExit:
+            return False
+
+    def ensure_directory(self, path: str):
+        """
+        Universal method to check whether a director exists and if not, create it (recursively).
+        :param path: the specific path
+        :return: None
+        """
+        try:
+            self.__conn.run("cd {path}".format(path=path), hide=True)
+        except UnexpectedExit:  # alternatively we can simply use "mkdir -p" command.
+            path = path[:-1] if path[-1] == "/" else path  # remove the possible "/" at tail
+            higher_level = path[:-len(path.split("/")[-1])]
+            self.ensure_directory(higher_level)  # recursively call itself to ensure the higher level is created
+            self.__conn.run("mkdir {path}".format(path=path))
+            print("mkdir {path} on port {port}.".format(path=path, port=self.__port))
 
     def _connect(self) -> Connection:
         """
@@ -140,32 +259,6 @@ class Server:
         config.read(self.__config_path)
         return config
 
-    def check_java(self) -> bool:
-        """
-        Check whether the java has already been installed
-        :return: boolean indicator
-        """
-        JAVA_HOME = self.__config["java"].get("JAVA_HOME")
-        try:
-            self.__conn.run("cd {JAVA_HOME}".format(JAVA_HOME=JAVA_HOME), hide=True)  # check the directory of java
-            print("Java has already been installed on port {port}.".format(port=self.__port))
-            return True
-        except UnexpectedExit:
-            return False
-
-    def check_spark(self) -> bool:
-        """
-        Check whether the spark has already been installed
-        :return: boolean indicator
-        """
-        SPARK_HOME = self.__config["spark"].get("SPARK_HOME")
-        try:
-            self.__conn.run("cd {SPARK_HOME}".format(SPARK_HOME=SPARK_HOME), hide=True)  # check the directory of spark
-            print("Spark has already been installed on port {port}.".format(port=self.__port))
-            return True
-        except UnexpectedExit:
-            return False
-
     def _check_profile(self) -> bool:
         """
         Check whether the environmental variables are set correctly
@@ -182,21 +275,6 @@ class Server:
     def _disable_firewall(self):
         self.__conn.run("sudo systemctl disable firewalld", pty=True, watchers=[self.__sudopass], hide=True)
         self.__conn.run("sudo systemctl stop firewalld", pty=True, watchers=[self.__sudopass], hide=True)
-
-    def ensure_directory(self, path: str):
-        """
-        Universal method to check whether a director exists and if not, create it (recursively).
-        :param path: the specific path
-        :return: None
-        """
-        try:
-            self.__conn.run("cd {path}".format(path=path), hide=True)
-        except UnexpectedExit:
-            path = path[:-1] if path[-1] == "/" else path  # remove the possible "/" at tail
-            higher_level = path[:-len(path.split("/")[-1])]
-            self.ensure_directory(higher_level)  # recursively call itself to ensure the higher level is created
-            self.__conn.run("mkdir {path}".format(path=path))
-            print("mkdir {path} on port {port}.".format(path=path, port=self.__port))
 
     def get_connection(self) -> Connection:
         return self.__conn
@@ -215,14 +293,19 @@ class SparkInstallationFailure(Exception):
         super(SparkInstallationFailure, self).__init__("Fail to install Spark on port {port}.".format(port=port))
 
 
+class Python3InstallationFailure(Exception):
+    def __init__(self, port: int):
+        super(Python3InstallationFailure, self).__init__("Fail to install Python3 on port {port}.".format(port=port))
+
+
 class ProfileFailure(Exception):
     def __init__(self, port: int):
         super(ProfileFailure, self).__init__("The profile does not work on port {port}.".format(port=port))
 
 
 if __name__ == '__main__':
-
-    slave2 = Server(10003)
-    slave2.upload_profile()
-    slave2.install_java()
-    slave2.install_spark()
+    slave = Server(10001)
+    slave.start_monitor()
+    import time
+    time.sleep(20)
+    slave.stop_monitor()
