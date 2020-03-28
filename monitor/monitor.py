@@ -2,17 +2,19 @@ import os
 import signal
 import datetime
 import psutil
+import sys
 
 
 class HardwareMonitor:
     __interval: float = 0.5
 
-    def __init__(self):
+    def __init__(self, interval: float = 0.5):
         signal.signal(signal.SIGTERM, self._terminate)
         print(os.getpid())
         self._write_port()
         self.__logs = []
         self.__terminate = False
+        self.__interval = interval
 
     def start(self):
         while not self.__terminate:
@@ -37,5 +39,12 @@ class HardwareMonitor:
 
 
 if __name__ == '__main__':
-    hardware_monitor = HardwareMonitor()
+    args = sys.argv
+    if len(args) > 1:
+        print(args[1])
+        interval = float(args[1])
+        hardware_monitor = HardwareMonitor(interval)
+    else:
+        hardware_monitor = HardwareMonitor()
+
     hardware_monitor.start()
