@@ -1,5 +1,3 @@
-stop-port-forward.sh
-
 cat ./conf/port-map | while read line
 do
 	array=($line)
@@ -10,3 +8,4 @@ do
   ssh-keygen -R [localhost]:$port
 	ssh -Nf -L $port:localhost:22 -i ./keys/spark spark@$addr
 done
+ps aux | grep 'ssh -Nf -L'
