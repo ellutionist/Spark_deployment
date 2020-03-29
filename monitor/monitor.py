@@ -19,7 +19,7 @@ class HardwareMonitor:
 
     def start(self):
         """
-        start the monitor and keep running until it receives the SIGTERM signal.
+        Start the monitor and keep running until it receives the SIGTERM signal.
         :return: None
         """
         while not self.__terminate:
@@ -33,7 +33,7 @@ class HardwareMonitor:
 
     def _write_pid(self):
         """
-        write the pid to logs/pid so that when terminating the system knows which process to send the signal
+        Write the pid to logs/pid so that when terminating the system knows which process to send the signal
         :return:
         """
         with open(self.__pid_file_path, "w") as pf:
@@ -41,7 +41,7 @@ class HardwareMonitor:
 
     def _write_logs(self, file_name="log"):
         """
-        write the data to local disk
+        Write the data to local disk
         :param file_name:
         :return:
         """
@@ -50,7 +50,7 @@ class HardwareMonitor:
 
     def _terminate(self, a, b):
         """
-        once receive the signal, change the boolean indicator to false so that the process will stop
+        Once received the signal, change the boolean indicator to false so that the process will stop
         :param a: no use
         :param b: no use
         :return:
