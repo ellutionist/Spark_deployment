@@ -7,11 +7,12 @@ import sys
 
 class HardwareMonitor:
     __interval: float = 0.5
+    __pid_file_path = "./logs/pid"
 
     def __init__(self, interval: float = 0.5):
         signal.signal(signal.SIGTERM, self._terminate)
         print(os.getpid())
-        self._write_port()
+        self._write_pid()
         self.__logs = []
         self.__terminate = False
         self.__interval = interval
@@ -26,8 +27,8 @@ class HardwareMonitor:
                                    str(memory_percent) + "\n")
         self._write_logs()
 
-    def _write_port(self):
-        with open("./logs/pid", "w") as pf:
+    def _write_pid(self):
+        with open(self.__pid_file_path, "w") as pf:
             pf.write(str(os.getpid()))
 
     def _write_logs(self, file_name="log"):
