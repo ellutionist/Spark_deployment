@@ -7,7 +7,7 @@ class Master(Server):
     def __init__(self, port: int):
         super(Master, self).__init__(port)
 
-    def broad_cast_conf(self, slaves: List[Server] = None):
+    def broad_cast_config(self, slaves: List[Server] = None):
         """
         Send the $SPARK_HOME/conf/spark-env.sh to all the slaves.
         If a list of Server objects is passed, the method will upload the config file directly,
@@ -36,7 +36,7 @@ class Master(Server):
             slave_ports: List[int] = self._get_slave_ports()
 
             with open("./slaves", "w") as slaves_tmp:
-                lines = [port_map[port] for port in slave_ports]
+                lines = [port_map[port] + "\n" for port in slave_ports]
                 lines.append("\n")
                 slaves_tmp.writelines(lines)
 
@@ -58,6 +58,7 @@ class Master(Server):
 
         pwd = self.get_connection().run("pwd", hide=True).stdout.strip()
         self.get_connection().put(private_key_path, "{pwd}/.ssh/spark".format(pwd=pwd))
+        self.get_connection().run("chmod 600 " + "{pwd}/.ssh/spark".format(pwd=pwd))
 
         port_map = self._get_port_map()
         with open("./config", "w") as conf:
@@ -83,9 +84,11 @@ class Master(Server):
         with open("./conf/port-map", "r") as f:
             for line in f.readlines():
                 if line != "\n":
-                    port, addr = line.split(" ")
-                    port = int(port)
-                    port_map[port] = addr
+                    parts = line.split(" ")
+                    if int(parts[-1]) == 22:
+                        addr = parts[2]
+                        port = int(parts[0])
+                        port_map[port] = addr
         return port_map
 
     def _get_slave_ports(self) -> List[int]:
@@ -100,5 +103,5 @@ class Master(Server):
 
 if __name__ == '__main__':
     master = Master(10000)
-    master.broad_cast_conf()
+    master.broad_cast_config()
 

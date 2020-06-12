@@ -1,6 +1,6 @@
 import os
 import signal
-import datetime
+import time
 import psutil
 import sys
 
@@ -27,7 +27,7 @@ class HardwareMonitor:
                 cpu_percent: float = psutil.cpu_percent(self.__interval)
             finally:
                 memory_percent: float = psutil.virtual_memory().percent
-                self.__logs.append(str(datetime.datetime.now().time()) + "," + str(cpu_percent) + "," +
+                self.__logs.append(str(time.time()) + "," + str(cpu_percent) + "," +
                                    str(memory_percent) + "\n")
         self._write_logs()
 

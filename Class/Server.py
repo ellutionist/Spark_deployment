@@ -32,9 +32,11 @@ class Server:
             print("Monitor started on port {}.".format(self.__port))
 
     def stop_monitor(self):
-        if self.__monitor_running:
+        try:
             self.__conn.run(self.__monitor_director + "/stop.sh", hide=True)
-            self.__monitor_running = False
+        except UnexpectedExit:
+            pass
+        finally:
             print("Monitor stopped on port {}.".format(self.__port))
 
     def upload_profile(self):
@@ -61,12 +63,18 @@ class Server:
             self.__conn.run("rm -rf " + self.__monitor_director)
             self.install_monitor()
 
-    def install_monitor(self):
+    def install_monitor(self, forth: bool = False):
         """
         upload the hardware monitor script to server
         :return:
         """
-        if not self.check_monitor():
+        if_install:bool
+        if forth:
+            if_install = True
+        else:
+            if_install = not self.check_monitor()
+
+        if if_install:
             print("Installing monitor on port {}.".format(self.__port))
             monitor_tar_path = self.__config["monitor"].get("monitor_tar_path")
             self.ensure_directory("~/Downloads")
@@ -74,6 +82,12 @@ class Server:
             pwd = self.__conn.run("pwd", hide=True).stdout.strip()
             self.__conn.put(monitor_tar_path, "{pwd}/Downloads/monitor.tar".format(pwd=pwd))
             self.__conn.run('cd ~/Downloads && tar -xf ~/Downloads/monitor.tar')
+
+            if forth:
+                try:
+                    self.__conn.run('rm -rf ~/opt/monitor', hide=True)
+                except UnexpectedExit:
+                    pass
             self.__conn.run('mv ~/Downloads/{folder_name} ~/opt/monitor'
                             .format(folder_name="monitor"), hide=True)
 
@@ -92,6 +106,8 @@ class Server:
             finally:
                 self.__conn.run("sudo -S yum install python36u -y", watchers=[self.__sudopass], hide=True)
                 self.__conn.run("sudo -S yum install yum install python36u-devel -y", watchers=[self.__sudopass],
+                                hide=True)
+                self.__conn.run("sudo -S yum install yum install gcc -y", watchers=[self.__sudopass],
                                 hide=True)
                 self.__conn.run("sudo -S pip3 install psutil", watchers=[self.__sudopass], hide=True)
                 if not self.check_python3():
@@ -114,11 +130,37 @@ class Server:
             pwd = self.__conn.run("pwd", hide=True).stdout.strip()
             self.__conn.put(java_tar_path, "{pwd}/Downloads/jdk8.tar".format(pwd=pwd))
             self.__conn.run('cd ~/Downloads && tar -xf ~/Downloads/jdk8.tar')
-            self.__conn.run('mv ~/Downloads/{folder_name} {JAVA_HOME}'.format(folder_name=java_folder_name,
-                                                                              JAVA_HOME=JAVA_HOME), hide=True)
+            self.__conn.run('sudo -S mv ~/Downloads/{folder_name} {JAVA_HOME}'.format(folder_name=java_folder_name,
+                                                                                      JAVA_HOME=JAVA_HOME),
+                            watchers=[self.__sudopass], hide=True)
 
             # check java again
             if not self.check_java():
+                raise JavaInstallationFailure(self.__port)
+
+    def install_scala(self):
+        """
+        If the scala is not installed yet, then install it.
+        :return: None
+        """
+        if not self.check_scala():
+            print("Installing Scala on port {}.".format(self.__port))
+
+            scala_tar_path = self.__config["scala"].get("scala_tar_path")
+            SCALA_HOME = self.__config["scala"].get("SCALA_HOME")
+            scala_folder_name = self.__config["scala"].get("scala_folder_name")
+
+            self.ensure_directory("~/Downloads")
+
+            pwd = self.__conn.run("pwd", hide=True).stdout.strip()
+            self.__conn.put(scala_tar_path, "{pwd}/Downloads/scala.tar".format(pwd=pwd))
+            self.__conn.run('cd ~/Downloads && tar -xf ~/Downloads/scala.tar')
+            self.__conn.run('sudo -S mv ~/Downloads/{folder_name} {JAVA_HOME}'.format(folder_name=scala_folder_name,
+                                                                                      JAVA_HOME=SCALA_HOME),
+                            watchers=[self.__sudopass], hide=True)
+
+            # check scala again
+            if not self.check_scala():
                 raise JavaInstallationFailure(self.__port)
 
     def install_spark(self):
@@ -140,12 +182,40 @@ class Server:
             pwd = self.__conn.run("pwd", hide=True).stdout.strip()
             self.__conn.put(spark_tar_path, "{pwd}/Downloads/spark.tar".format(pwd=pwd))
             self.__conn.run('cd ~/Downloads && tar -xf ~/Downloads/spark.tar')
-            self.__conn.run('mv ~/Downloads/{folder_name} {SPARK_HOME}'.format(folder_name=spark_folder_name,
-                                                                               SPARK_HOME=SPARK_HOME), hide=True)
+            self.__conn.run('sudo -S mv ~/Downloads/{folder_name} {SPARK_HOME}'.format(folder_name=spark_folder_name,
+                                                                                       SPARK_HOME=SPARK_HOME),
+                            watchers=[self.__sudopass], hide=True)
 
             # check spark again
             if not self.check_spark():
                 raise SparkInstallationFailure(self.__port)
+
+    def install_hadoop(self):
+        """
+        If the Hadoop is not installed yet, then install it.
+        :return: None
+        """
+        if not self.check_hadoop():
+            print("Installing Hadoop on port {}.".format(self.__port))
+            hadoop_tar_path = self.__config["hadoop"].get("hadoop_tar_path")
+            HADOOP_HOME = self.__config["hadoop"].get("HADOOP_HOME")
+            HADOOP_HOME = HADOOP_HOME[:-1] if HADOOP_HOME[-1] == "/" else HADOOP_HOME
+            hadoop_folder_name = self.__config["hadoop"].get("hadoop_folder_name")
+
+            self.ensure_directory("~/Downloads")
+            install_location = HADOOP_HOME[:-len(HADOOP_HOME.split("/")[-1])]
+            self.ensure_directory(install_location)
+
+            pwd = self.__conn.run("pwd", hide=True).stdout.strip()
+            self.__conn.put(hadoop_tar_path, "{pwd}/Downloads/hadoop.tar".format(pwd=pwd))
+            self.__conn.run('cd ~/Downloads && tar -xf ~/Downloads/hadoop.tar')
+            self.__conn.run('sudo -S mv ~/Downloads/{folder_name} {SPARK_HOME}'.format(folder_name=hadoop_folder_name,
+                                                                                       SPARK_HOME=HADOOP_HOME),
+                            watchers=[self.__sudopass], hide=True)
+
+            # check Hadoop again
+            if not self.check_hadoop():
+                raise HadoopInstallationFailure(self.__port)
 
     def check_monitor(self) -> bool:
         try:
@@ -169,6 +239,19 @@ class Server:
         except UnexpectedExit:
             return False
 
+    def check_scala(self) -> bool:
+        """
+        Check whether the scala has already been installed
+        :return: boolean indicator
+        """
+        SCALA_HOME = self.__config["scala"].get("SCALA_HOME")
+        try:
+            self.__conn.run("cd {SCALA_HOME}".format(SCALA_HOME=SCALA_HOME), hide=True)  # check the directory of scala
+            print("Scala has already been installed on port {port}.".format(port=self.__port))
+            return True
+        except UnexpectedExit:
+            return False
+
     def check_spark(self) -> bool:
         """
         Check whether the spark has already been installed
@@ -178,6 +261,20 @@ class Server:
         try:
             self.__conn.run("cd {SPARK_HOME}".format(SPARK_HOME=SPARK_HOME), hide=True)  # check the directory of spark
             print("Spark has already been installed on port {port}.".format(port=self.__port))
+            return True
+        except UnexpectedExit:
+            return False
+
+    def check_hadoop(self) -> bool:
+        """
+        Check whether the hadoop has already been installed
+        :return: boolean indicator
+        """
+        HADOOP_HOME = self.__config["hadoop"].get("HADOOP_HOME")
+        try:
+            # check the directory of hadoop
+            self.__conn.run("cd {HADOOP_HOME}".format(HADOOP_HOME=HADOOP_HOME), hide=True)
+            print("HADOOP has already been installed on port {port}.".format(port=self.__port))
             return True
         except UnexpectedExit:
             return False
@@ -266,11 +363,16 @@ class Server:
         """
         JAVA_HOME = self.__config["java"].get("JAVA_HOME")
         SPARK_HOME = self.__config["spark"].get("SPARK_HOME")
+        SCALA_HOME = self.__config["scala"].get("SCALA_HOME")
+        HADOOP_HOME = self.__config["hadoop"].get("HADOOP_HOME")
 
         result_java: Result = self.__conn.run("source /etc/profile && echo $JAVA_HOME", hide=True)
         result_spark: Result = self.__conn.run("source /etc/profile && echo $SPARK_HOME", hide=True)
+        result_scala: Result = self.__conn.run("source /etc/profile && echo $SCALA_HOME", hide=True)
+        result_hadoop: Result = self.__conn.run("source /etc/profile && echo $HADOOP_HOME", hide=True)
 
-        return result_java.stdout.strip() == JAVA_HOME and result_spark.stdout.strip() == SPARK_HOME
+        return result_java.stdout.strip() == JAVA_HOME and result_spark.stdout.strip() == SPARK_HOME and result_scala \
+            .stdout.strip() == SCALA_HOME and result_hadoop.stdout.strip() == HADOOP_HOME
 
     def _disable_firewall(self):
         self.__conn.run("sudo systemctl disable firewalld", pty=True, watchers=[self.__sudopass], hide=True)
@@ -282,15 +384,36 @@ class Server:
     def get_config(self) -> ConfigParser:
         return self.__config
 
+    def get_log_path(self) -> str:
+        """
+        get the path of file which stores the hardware monitor data
+        :return:
+        """
+        return self.__config["monitor"].get("log_path")
+
+    def update_hadoop(self):
+        self.__conn.run("source /etc/profile && rm -rf $HADOOP_HOME")
+        self.install_hadoop()
+
 
 class JavaInstallationFailure(Exception):
     def __init__(self, port: int):
         super(JavaInstallationFailure, self).__init__("Fail to install Java on port {port}.".format(port=port))
 
 
+class ScalaInstallationFailure(Exception):
+    def __init__(self, port: int):
+        super(ScalaInstallationFailure, self).__init__("Fail to install Scala on port {port}.".format(port=port))
+
+
 class SparkInstallationFailure(Exception):
     def __init__(self, port: int):
         super(SparkInstallationFailure, self).__init__("Fail to install Spark on port {port}.".format(port=port))
+
+
+class HadoopInstallationFailure(Exception):
+    def __init__(self, port: int):
+        super(HadoopInstallationFailure, self).__init__("Fail to install Hadoop on port {port}.".format(port=port))
 
 
 class Python3InstallationFailure(Exception):
@@ -304,8 +427,6 @@ class ProfileFailure(Exception):
 
 
 if __name__ == '__main__':
-    slave = Server(10001)
-    slave.start_monitor()
-    import time
-    time.sleep(20)
-    slave.stop_monitor()
+    for port in [10033]:
+        server = Server(port)
+        server.install_hadoop()
