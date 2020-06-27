@@ -10,6 +10,6 @@ do
 
   # remove the known host
   ssh-keygen -R [localhost]:$port
-	ssh -Nf -L $port:$inner_addr:$inner_port -i ~/.ssh/keys/xenserver cheng@$addr
+	ssh -Nf -L $port:$inner_addr:$inner_port $addr
 done
 ps aux | grep 'ssh -Nf -L'

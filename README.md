@@ -108,7 +108,7 @@ Run shell script
 ### Then
 
 Submit the application just in the way you do in the master's terminal of Spark 
-(but using the special shell script Spark_deployment/sbin/spark-submit):
+(but using the special shell script **Spark_deployment/sbin/spark-submit**):
 
 For example
 
@@ -125,7 +125,7 @@ For example
 The shell script will call the python script to submit the application and monitor the hardware
 usage of every node in the cluster.
 
-After the application is completed, it will collect the monitoring data from nodes and ask you to
+After the application is completed (or killed), it will collect the monitoring data from nodes and ask you to
 name the directory of data files.
 
 For example
@@ -135,4 +135,4 @@ For example
 
 The data will be stored in
 
-    Spark-deployment/monitor_data/{directory you named}
+    Spark_deployment/monitor_data/{directory you named}
